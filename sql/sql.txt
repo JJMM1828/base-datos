@@ -1,0 +1,225 @@
+----------------------------------------------------------------------
+-- CREACIÓN DE LA BASE DE DATOS Y SELECCIÓN DE LA MISMA
+----------------------------------------------------------------------
+-- Se crea la base de datos si no existe y se selecciona para su uso
+CREATE DATABASE IF NOT EXISTS gestion_inventario;
+USE gestion_inventario;
+
+----------------------------------------------------------------------
+-- CREACIÓN DE TABLAS
+----------------------------------------------------------------------
+
+-- Tabla de Productos:
+-- Almacena la información de cada producto: nombre, marca, stock (cantidad disponible) y precio.
+-- La columna 'marca' tiene un valor por defecto de 'No informado' si no se especifica.
+CREATE TABLE IF NOT EXISTS productos (
+    id_producto INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    marca VARCHAR(100) NOT NULL DEFAULT 'No informado',
+    stock INT NOT NULL,
+    precio DECIMAL(10,2) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabla de Ventas:
+-- Registra cada venta realizada. Se almacena la fecha (por defecto la fecha actual) y el total de la venta.
+-- Se añade un índice en la columna 'fecha' para facilitar las consultas por período.
+CREATE TABLE IF NOT EXISTS ventas (
+    id_venta INT AUTO_INCREMENT PRIMARY KEY,
+    fecha DATE NOT NULL DEFAULT (CURRENT_DATE),
+    total DECIMAL(10,2) NOT NULL,
+    INDEX (fecha)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabla de Detalle de Ventas:
+-- Almacena cada línea (detalle) de una venta, es decir, cada producto vendido en una venta,
+-- junto con la cantidad, precio unitario y subtotal (cantidad * precio_unitario).
+-- Se establecen claves foráneas para garantizar la integridad referencial.
+CREATE TABLE IF NOT EXISTS detalle_venta (
+    id_detalle INT AUTO_INCREMENT PRIMARY KEY,
+    id_venta INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (id_venta) REFERENCES ventas(id_venta)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+----------------------------------------------------------------------
+-- TRIGGERS PARA ACTUALIZAR EL TOTAL DE LA VENTA
+----------------------------------------------------------------------
+-- Estos triggers recalculan el total de la venta en la tabla "ventas" cada vez que se inserta,
+-- actualiza o elimina un detalle en "detalle_venta".
+
+-- Trigger AFTER INSERT: Se activa después de insertar un detalle en la venta.
+DELIMITER //
+CREATE TRIGGER actualizar_total_venta_after_insert
+AFTER INSERT ON detalle_venta
+FOR EACH ROW
+BEGIN
+  UPDATE ventas
+  SET total = (
+    SELECT IFNULL(SUM(subtotal), 0)
+    FROM detalle_venta
+    WHERE id_venta = NEW.id_venta
+  )
+  WHERE id_venta = NEW.id_venta;
+END;
+//
+DELIMITER ;
+
+-- Trigger AFTER UPDATE: Se activa después de actualizar un detalle de la venta.
+DELIMITER //
+CREATE TRIGGER actualizar_total_venta_after_update
+AFTER UPDATE ON detalle_venta
+FOR EACH ROW
+BEGIN
+  UPDATE ventas
+  SET total = (
+    SELECT IFNULL(SUM(subtotal), 0)
+    FROM detalle_venta
+    WHERE id_venta = NEW.id_venta
+  )
+  WHERE id_venta = NEW.id_venta;
+END;
+//
+DELIMITER ;
+
+-- Trigger AFTER DELETE: Se activa después de eliminar un detalle de la venta.
+DELIMITER //
+CREATE TRIGGER actualizar_total_venta_after_delete
+AFTER DELETE ON detalle_venta
+FOR EACH ROW
+BEGIN
+  UPDATE ventas
+  SET total = (
+    SELECT IFNULL(SUM(subtotal), 0)
+    FROM detalle_venta
+    WHERE id_venta = OLD.id_venta
+  )
+  WHERE id_venta = OLD.id_venta;
+END;
+//
+DELIMITER ;
+
+----------------------------------------------------------------------
+-- PROCEDIMIENTOS ALMACENADOS
+----------------------------------------------------------------------
+
+-- Procedimiento para Insertar un Producto:
+-- Valida que el nombre no esté vacío y que el stock y precio sean mayores o iguales a cero.
+DELIMITER //
+CREATE PROCEDURE sp_insert_product(
+    IN p_nombre VARCHAR(255),
+    IN p_marca VARCHAR(100),
+    IN p_stock INT,
+    IN p_precio DECIMAL(10,2)
+)
+BEGIN
+    IF p_nombre IS NULL OR p_nombre = '' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre del producto es obligatorio';
+    END IF;
+    IF p_stock < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El stock debe ser mayor o igual a cero';
+    END IF;
+    IF p_precio < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El precio debe ser mayor o igual a cero';
+    END IF;
+    INSERT INTO productos (nombre, marca, stock, precio)
+    VALUES (p_nombre, IFNULL(p_marca, 'No informado'), p_stock, p_precio);
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Actualizar un Producto:
+-- Permite modificar los datos de un producto existente con las mismas validaciones.
+DELIMITER //
+CREATE PROCEDURE sp_update_product(
+    IN p_id INT,
+    IN p_nombre VARCHAR(255),
+    IN p_marca VARCHAR(100),
+    IN p_stock INT,
+    IN p_precio DECIMAL(10,2)
+)
+BEGIN
+    IF p_nombre IS NULL OR p_nombre = '' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre del producto es obligatorio';
+    END IF;
+    IF p_stock < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El stock debe ser mayor o igual a cero';
+    END IF;
+    IF p_precio < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El precio debe ser mayor o igual a cero';
+    END IF;
+    UPDATE productos
+    SET nombre = p_nombre,
+        marca = IFNULL(p_marca, 'No informado'),
+        stock = p_stock,
+        precio = p_precio
+    WHERE id_producto = p_id;
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Eliminar un Producto:
+-- Elimina un producto dado su ID.
+DELIMITER //
+CREATE PROCEDURE sp_delete_product(
+    IN p_id INT
+)
+BEGIN
+    DELETE FROM productos WHERE id_producto = p_id;
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Insertar una Venta (Cabecera):
+-- Inserta una venta con la fecha especificada y total 0; luego retorna el ID de la venta.
+DELIMITER //
+CREATE PROCEDURE sp_insert_sale(
+    IN p_fecha DATE,
+    OUT p_sale_id INT
+)
+BEGIN
+    INSERT INTO ventas (fecha, total) VALUES (p_fecha, 0);
+    SET p_sale_id = LAST_INSERT_ID();
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Insertar un Detalle de Venta:
+-- Valida que el producto exista y que el stock sea suficiente, calcula el subtotal,
+-- inserta el detalle de la venta y actualiza el stock del producto.
+DELIMITER //
+CREATE PROCEDURE sp_insert_sale_detail(
+    IN p_sale_id INT,
+    IN p_product_id INT,
+    IN p_cantidad INT,
+    IN p_precio_unitario DECIMAL(10,2)
+)
+BEGIN
+    DECLARE v_stock INT;
+    DECLARE v_subtotal DECIMAL(10,2);
+
+    -- Obtener el stock actual del producto
+    SELECT stock INTO v_stock FROM productos WHERE id_producto = p_product_id;
+    IF v_stock IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
+    END IF;
+    IF p_cantidad > v_stock THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente';
+    END IF;
+
+    SET v_subtotal = p_cantidad * p_precio_unitario;
+
+    -- Insertar el detalle de la venta
+    INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, subtotal)
+    VALUES (p_sale_id, p_product_id, p_cantidad, p_precio_unitario, v_subtotal);
+
+    -- Actualizar el stock del producto
+    UPDATE productos SET stock = stock - p_cantidad WHERE id_producto = p_product_id;
+END;
+//
+DELIMITER ;
