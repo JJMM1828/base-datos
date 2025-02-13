@@ -31,8 +31,7 @@ CREATE TABLE IF NOT EXISTS ventas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabla de Detalle de Ventas:
--- Almacena cada línea (detalle) de una venta, es decir, cada producto vendido en una venta,
--- junto con la cantidad, precio unitario y subtotal (cantidad * precio_unitario).
+-- Almacena cada línea (detalle) de una venta: cada producto vendido, la cantidad, precio unitario y subtotal.
 -- Se establecen claves foráneas para garantizar la integridad referencial.
 CREATE TABLE IF NOT EXISTS detalle_venta (
     id_detalle INT AUTO_INCREMENT PRIMARY KEY,
@@ -50,12 +49,12 @@ CREATE TABLE IF NOT EXISTS detalle_venta (
 ----------------------------------------------------------------------
 -- TRIGGERS PARA ACTUALIZAR EL TOTAL DE LA VENTA
 ----------------------------------------------------------------------
--- Estos triggers recalculan el total de la venta en la tabla "ventas" cada vez que se inserta,
--- actualiza o elimina un detalle en "detalle_venta".
+-- Estos triggers recalculan el total de la venta en la tabla "ventas" cada vez que se
+-- inserta, actualiza o elimina un detalle en "detalle_venta".
 
 -- Trigger AFTER INSERT: Se activa después de insertar un detalle en la venta.
 DELIMITER //
-CREATE TRIGGER actualizar_total_venta_after_insert
+CREATE TRIGGER trg_actualizar_total_venta_despues_insercion
 AFTER INSERT ON detalle_venta
 FOR EACH ROW
 BEGIN
@@ -72,7 +71,7 @@ DELIMITER ;
 
 -- Trigger AFTER UPDATE: Se activa después de actualizar un detalle de la venta.
 DELIMITER //
-CREATE TRIGGER actualizar_total_venta_after_update
+CREATE TRIGGER trg_actualizar_total_venta_despues_actualizacion
 AFTER UPDATE ON detalle_venta
 FOR EACH ROW
 BEGIN
@@ -89,7 +88,7 @@ DELIMITER ;
 
 -- Trigger AFTER DELETE: Se activa después de eliminar un detalle de la venta.
 DELIMITER //
-CREATE TRIGGER actualizar_total_venta_after_delete
+CREATE TRIGGER trg_actualizar_total_venta_despues_eliminacion
 AFTER DELETE ON detalle_venta
 FOR EACH ROW
 BEGIN
@@ -111,7 +110,7 @@ DELIMITER ;
 -- Procedimiento para Insertar un Producto:
 -- Valida que el nombre no esté vacío y que el stock y precio sean mayores o iguales a cero.
 DELIMITER //
-CREATE PROCEDURE sp_insert_product(
+CREATE PROCEDURE sp_insertar_producto(
     IN p_nombre VARCHAR(255),
     IN p_marca VARCHAR(100),
     IN p_stock INT,
@@ -134,9 +133,9 @@ END;
 DELIMITER ;
 
 -- Procedimiento para Actualizar un Producto:
--- Permite modificar los datos de un producto existente con las mismas validaciones.
+-- Permite modificar los datos de un producto existente, realizando las mismas validaciones.
 DELIMITER //
-CREATE PROCEDURE sp_update_product(
+CREATE PROCEDURE sp_actualizar_producto(
     IN p_id INT,
     IN p_nombre VARCHAR(255),
     IN p_marca VARCHAR(100),
@@ -164,9 +163,9 @@ END;
 DELIMITER ;
 
 -- Procedimiento para Eliminar un Producto:
--- Elimina un producto dado su ID.
+-- Elimina un producto según su ID.
 DELIMITER //
-CREATE PROCEDURE sp_delete_product(
+CREATE PROCEDURE sp_eliminar_producto(
     IN p_id INT
 )
 BEGIN
@@ -176,26 +175,27 @@ END;
 DELIMITER ;
 
 -- Procedimiento para Insertar una Venta (Cabecera):
--- Inserta una venta con la fecha especificada y total 0; luego retorna el ID de la venta.
+-- Inserta una venta con la fecha especificada y total = 0 (los triggers actualizarán el total).
+-- Retorna el ID de la venta mediante el parámetro de salida.
 DELIMITER //
-CREATE PROCEDURE sp_insert_sale(
+CREATE PROCEDURE sp_insertar_venta(
     IN p_fecha DATE,
-    OUT p_sale_id INT
+    OUT p_id_venta INT
 )
 BEGIN
     INSERT INTO ventas (fecha, total) VALUES (p_fecha, 0);
-    SET p_sale_id = LAST_INSERT_ID();
+    SET p_id_venta = LAST_INSERT_ID();
 END;
 //
 DELIMITER ;
 
 -- Procedimiento para Insertar un Detalle de Venta:
--- Valida que el producto exista y que el stock sea suficiente, calcula el subtotal,
+-- Valida que el producto exista y que el stock sea suficiente; calcula el subtotal,
 -- inserta el detalle de la venta y actualiza el stock del producto.
 DELIMITER //
-CREATE PROCEDURE sp_insert_sale_detail(
-    IN p_sale_id INT,
-    IN p_product_id INT,
+CREATE PROCEDURE sp_insertar_detalle_venta(
+    IN p_id_venta INT,
+    IN p_id_producto INT,
     IN p_cantidad INT,
     IN p_precio_unitario DECIMAL(10,2)
 )
@@ -204,7 +204,7 @@ BEGIN
     DECLARE v_subtotal DECIMAL(10,2);
 
     -- Obtener el stock actual del producto
-    SELECT stock INTO v_stock FROM productos WHERE id_producto = p_product_id;
+    SELECT stock INTO v_stock FROM productos WHERE id_producto = p_id_producto;
     IF v_stock IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
     END IF;
@@ -216,10 +216,10 @@ BEGIN
 
     -- Insertar el detalle de la venta
     INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, subtotal)
-    VALUES (p_sale_id, p_product_id, p_cantidad, p_precio_unitario, v_subtotal);
+    VALUES (p_id_venta, p_id_producto, p_cantidad, p_precio_unitario, v_subtotal);
 
     -- Actualizar el stock del producto
-    UPDATE productos SET stock = stock - p_cantidad WHERE id_producto = p_product_id;
+    UPDATE productos SET stock = stock - p_cantidad WHERE id_producto = p_id_producto;
 END;
 //
 DELIMITER ;
