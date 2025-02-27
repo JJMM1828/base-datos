@@ -1,16 +1,3 @@
-"""
-Aplicación de Gestión de Inventario en 3 Capas
-  - Capa de Acceso a Datos: Conexión y ejecución de consultas en MySQL.
-  - Capa de Lógica de Negocio: Lógica de negocio y llamadas a procedimientos almacenados.
-  - Capa de Presentación: Interfaz gráfica en Tkinter.
-
-Esta versión se adapta al nuevo modelo en el que:
- - El precio se almacena únicamente en la tabla "productos".
- - En la tabla "detalle_venta" se elimina la columna "precio_unitario"; el subtotal se calcula automáticamente.
- - Se utilizan triggers para validar el stock y calcular el subtotal.
- - La ventana Reportes muestra el gráfico de barras horizontal en la ventana clásica de matplotlib.
- - La ventana Producto Más Vendido muestra, según el mes y año seleccionado, tanto el producto con mayor cantidad vendida como el que generó mayores ingresos.
-"""
 
 ##############################
 # CAPA 1: ACCESO A DATOS (BaseDatos)
