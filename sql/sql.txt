@@ -385,3 +385,20 @@ END;
 //
 DELIMITER ;
 
+------------------------------------------------
+-- CONSULTAS DIRECTAS
+------------------------------------------------
+-- Retorna los meses (numéricos) en los que existen registros en ventas.
+-- SELECT DISTINCT MONTH(fecha) as mes FROM ventas ORDER BY mes
+
+-- Retorna los años en los que existen registros en ventas.
+-- SELECT DISTINCT YEAR(fecha) as anio FROM ventas ORDER BY anio
+
+-- Retorna el reporte de ventas agrupado por producto para el mes y año dados.
+-- Devuelve el nombre del producto, la suma de las cantidades vendidas y el total de ingresos.
+--  SELECT p.nombre, SUM(dv.cantidad) as total_vendido, SUM(dv.subtotal) as total_ingresos
+--      FROM ventas v
+--      JOIN detalle_venta dv ON v.id_venta = dv.id_venta
+--      JOIN productos p ON dv.id_producto = p.id_producto
+--      WHERE MONTH(v.fecha) = %s AND YEAR(v.fecha) = %s
+--      GROUP BY p.id_producto
