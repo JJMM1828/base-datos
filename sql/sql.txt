@@ -9,6 +9,8 @@ USE gestion_inventario;
 ----------------------------------------------------------------------
 
 -- Tabla de Productos:
+-- Almacena la información de cada producto: nombre, marca, stock y precio.
+-- El precio se maneja únicamente en esta tabla.
 CREATE TABLE IF NOT EXISTS productos (
     id_producto INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -18,6 +20,7 @@ CREATE TABLE IF NOT EXISTS productos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabla de Ventas:
+-- Registra cada venta realizada, con la fecha (por defecto la fecha actual) y el total de la venta.
 CREATE TABLE IF NOT EXISTS ventas (
     id_venta INT AUTO_INCREMENT PRIMARY KEY,
     fecha DATE NOT NULL DEFAULT (CURRENT_DATE),
@@ -26,6 +29,9 @@ CREATE TABLE IF NOT EXISTS ventas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabla de Detalle de Ventas:
+-- Registra cada línea de una venta: el producto vendido, la cantidad y el subtotal.
+-- NOTA: Se ha eliminado la columna "precio_unitario" para evitar redundancia, ya que el precio se obtiene de la tabla productos.
+-- La columna subtotal no se define como NOT NULL, ya que se calcula automáticamente mediante triggers.
 CREATE TABLE IF NOT EXISTS detalle_venta (
     id_detalle INT AUTO_INCREMENT PRIMARY KEY,
     id_venta INT NOT NULL,
@@ -54,6 +60,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
 -- TRIGGERS PARA ACTUALIZAR EL TOTAL DE LA VENTA
 ----------------------------------------------------------------------
 DELIMITER //
+
 CREATE TRIGGER trg_actualizar_total_venta_despues_insercion
 AFTER INSERT ON detalle_venta
 FOR EACH ROW
@@ -102,7 +109,7 @@ END;
 DELIMITER ;
 
 ----------------------------------------------------------------------
--- TRIGGERS PARA VALIDAR STOCK Y CALCULAR SUBTOTAL
+-- TRIGGERS PARA VALIDAR STOCK Y CALCULAR SUBTOTAL EN DETALLE_VENTA
 ----------------------------------------------------------------------
 DELIMITER //
 CREATE TRIGGER trg_validar_y_calcular_subtotal_antes_insercion
@@ -111,19 +118,20 @@ FOR EACH ROW
 BEGIN
     DECLARE v_stock INT;
     DECLARE v_precio DECIMAL(10,2);
-
-    -- Obtener stock y precio actual del producto
+    
+    -- Obtener el stock y precio actual del producto
     SELECT stock, precio INTO v_stock, v_precio
     FROM productos
     WHERE id_producto = NEW.id_producto;
-
+    
     IF v_stock IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
     END IF;
     IF NEW.cantidad > v_stock THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente';
     END IF;
-
+    
+    -- Calcular el subtotal automáticamente
     SET NEW.subtotal = NEW.cantidad * v_precio;
 END;
 //
@@ -135,18 +143,18 @@ FOR EACH ROW
 BEGIN
     DECLARE v_stock INT;
     DECLARE v_precio DECIMAL(10,2);
-
+    
     SELECT stock, precio INTO v_stock, v_precio
     FROM productos
     WHERE id_producto = NEW.id_producto;
-
+    
     IF v_stock IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
     END IF;
     IF NEW.cantidad > v_stock THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente';
     END IF;
-
+    
     SET NEW.subtotal = NEW.cantidad * v_precio;
 END;
 //
@@ -259,3 +267,121 @@ BEGIN
 END;
 //
 DELIMITER ;
+
+----------------------------------------------------------------------
+-- PROCEDIMIENTOS ALMACENADOS
+----------------------------------------------------------------------
+
+-- Procedimiento para Insertar un Producto:
+DELIMITER //
+CREATE PROCEDURE sp_insertar_producto(
+    IN p_nombre VARCHAR(255),
+    IN p_marca VARCHAR(100),
+    IN p_stock INT,
+    IN p_precio DECIMAL(10,2)
+)
+BEGIN
+    IF p_nombre IS NULL OR p_nombre = '' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre del producto es obligatorio';
+    END IF;
+    IF p_stock < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El stock debe ser mayor o igual a cero';
+    END IF;
+    IF p_precio < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El precio debe ser mayor o igual a cero';
+    END IF;
+    INSERT INTO productos (nombre, marca, stock, precio)
+    VALUES (p_nombre, IFNULL(p_marca, 'No informado'), p_stock, p_precio);
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Actualizar un Producto:
+DELIMITER //
+CREATE PROCEDURE sp_actualizar_producto(
+    IN p_id INT,
+    IN p_nombre VARCHAR(255),
+    IN p_marca VARCHAR(100),
+    IN p_stock INT,
+    IN p_precio DECIMAL(10,2)
+)
+BEGIN
+    IF p_nombre IS NULL OR p_nombre = '' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre del producto es obligatorio';
+    END IF;
+    IF p_stock < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El stock debe ser mayor o igual a cero';
+    END IF;
+    IF p_precio < 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El precio debe ser mayor o igual a cero';
+    END IF;
+    UPDATE productos
+    SET nombre = p_nombre,
+        marca = IFNULL(p_marca, 'No informado'),
+        stock = p_stock,
+        precio = p_precio
+    WHERE id_producto = p_id;
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Eliminar un Producto:
+DELIMITER //
+CREATE PROCEDURE sp_eliminar_producto(
+    IN p_id INT
+)
+BEGIN
+    DELETE FROM productos WHERE id_producto = p_id;
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Insertar una Venta (Cabecera):
+DELIMITER //
+CREATE PROCEDURE sp_insertar_venta(
+    IN p_fecha DATE,
+    OUT p_id_venta INT
+)
+BEGIN
+    INSERT INTO ventas (fecha, total) VALUES (p_fecha, 0);
+    SET p_id_venta = LAST_INSERT_ID();
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para Insertar un Detalle de Venta:
+DELIMITER //
+CREATE PROCEDURE sp_insertar_detalle_venta(
+    IN p_id_venta INT,
+    IN p_id_producto INT,
+    IN p_cantidad INT
+)
+BEGIN
+    DECLARE v_stock INT;
+    DECLARE v_precio DECIMAL(10,2);
+    DECLARE v_subtotal DECIMAL(10,2);
+    
+    -- Obtener el stock y precio actual del producto
+    SELECT stock, precio INTO v_stock, v_precio 
+    FROM productos 
+    WHERE id_producto = p_id_producto;
+    
+    IF v_stock IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
+    END IF;
+    IF p_cantidad > v_stock THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente';
+    END IF;
+    
+    SET v_subtotal = p_cantidad * v_precio;
+    
+    -- Insertar el detalle de la venta (el campo subtotal se calculará automáticamente mediante trigger o aquí)
+    INSERT INTO detalle_venta (id_venta, id_producto, cantidad, subtotal)
+    VALUES (p_id_venta, p_id_producto, p_cantidad, v_subtotal);
+    
+    -- Actualizar el stock del producto
+    UPDATE productos SET stock = stock - p_cantidad WHERE id_producto = p_id_producto;
+END;
+//
+DELIMITER ;
+
