@@ -1,12 +1,12 @@
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- CREACIÓN DE LA BASE DE DATOS Y SELECCIÓN DE LA MISMA
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 CREATE DATABASE IF NOT EXISTS gestion_inventario;
 USE gestion_inventario;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- CREACIÓN DE TABLAS PRINCIPALES
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 
 -- Tabla de Productos:
 -- Almacena la información de cada producto: nombre, marca, stock y precio.
@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS detalle_venta (
         ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- CREACIÓN DE LA TABLA DE AUDITORÍA
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS auditoria (
     id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
     tabla VARCHAR(100) NOT NULL,
@@ -56,9 +56,9 @@ CREATE TABLE IF NOT EXISTS auditoria (
     usuario VARCHAR(100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- TRIGGERS PARA ACTUALIZAR EL TOTAL DE LA VENTA
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 DELIMITER //
 
 CREATE TRIGGER trg_actualizar_total_venta_despues_insercion
@@ -108,9 +108,9 @@ END;
 //
 DELIMITER ;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- TRIGGERS PARA VALIDAR STOCK Y CALCULAR SUBTOTAL EN DETALLE_VENTA
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 DELIMITER //
 CREATE TRIGGER trg_validar_y_calcular_subtotal_antes_insercion
 BEFORE INSERT ON detalle_venta
@@ -160,9 +160,9 @@ END;
 //
 DELIMITER ;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- TRIGGERS DE AUDITORÍA PARA TABLA PRODUCTOS
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 DELIMITER //
 CREATE TRIGGER trg_auditoria_productos_insert
 AFTER INSERT ON productos
@@ -196,9 +196,9 @@ END;
 //
 DELIMITER ;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- TRIGGERS DE AUDITORÍA PARA TABLA VENTAS
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 DELIMITER //
 CREATE TRIGGER trg_auditoria_ventas_insert
 AFTER INSERT ON ventas
@@ -232,9 +232,9 @@ END;
 //
 DELIMITER ;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- TRIGGERS DE AUDITORÍA PARA TABLA DETALLE_VENTA
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 DELIMITER //
 CREATE TRIGGER trg_auditoria_detalle_venta_insert
 AFTER INSERT ON detalle_venta
@@ -268,9 +268,9 @@ END;
 //
 DELIMITER ;
 
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 -- PROCEDIMIENTOS ALMACENADOS
-----------------------------------------------------------------------
+-- --------------------------------------------------------------------
 
 -- Procedimiento para Insertar un Producto:
 DELIMITER //
@@ -385,9 +385,10 @@ END;
 //
 DELIMITER ;
 
-------------------------------------------------
+
+-- --------------------------------------------------------------------
 -- CONSULTAS DIRECTAS
-------------------------------------------------
+-- --------------------------------------------------------------------
 -- Retorna los meses (numéricos) en los que existen registros en ventas.
 -- SELECT DISTINCT MONTH(fecha) as mes FROM ventas ORDER BY mes
 
@@ -403,10 +404,13 @@ DELIMITER ;
 --      WHERE MONTH(v.fecha) = %s AND YEAR(v.fecha) = %s
 --      GROUP BY p.id_producto
 
---------------------------------------------------
+-- ------------------------------------------------
 -- Ejemplo insercion
---------------------------------------------------
+-- ------------------------------------------------
 -- CALL sp_insertar_producto('Helado', 'MarcaX', 100, 19.99);
--- CALL sp_insertar_venta('2024-11-05', idVenta)
--- SELECT LAST_INSERT_ID() AS idVenta;;
+
+-- set @idVenta = 1;
+-- CALL sp_insertar_venta('2024-11-05', @idVenta);
+
+-- CALL sp_insertar_detalle_venta(@idVenta, 1, 2);
 -- CALL sp_insertar_detalle_venta(idVenta, 1, 2);
