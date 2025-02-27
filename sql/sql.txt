@@ -402,3 +402,11 @@ DELIMITER ;
 --      JOIN productos p ON dv.id_producto = p.id_producto
 --      WHERE MONTH(v.fecha) = %s AND YEAR(v.fecha) = %s
 --      GROUP BY p.id_producto
+
+--------------------------------------------------
+-- Ejemplo insercion
+--------------------------------------------------
+-- CALL sp_insertar_producto('Helado', 'MarcaX', 100, 19.99);
+-- CALL sp_insertar_venta('2024-11-05', idVenta)
+-- SELECT LAST_INSERT_ID() AS idVenta;;
+-- CALL sp_insertar_detalle_venta(idVenta, 1, 2);
