@@ -1,17 +1,14 @@
 ----------------------------------------------------------------------
 -- CREACIÓN DE LA BASE DE DATOS Y SELECCIÓN DE LA MISMA
 ----------------------------------------------------------------------
--- Se crea la base de datos si no existe y se selecciona para su uso
 CREATE DATABASE IF NOT EXISTS gestion_inventario;
 USE gestion_inventario;
 
 ----------------------------------------------------------------------
--- CREACIÓN DE TABLAS
+-- CREACIÓN DE TABLAS PRINCIPALES
 ----------------------------------------------------------------------
 
 -- Tabla de Productos:
--- Almacena la información de cada producto: nombre, marca, stock (cantidad disponible) y precio.
--- La columna 'marca' tiene un valor por defecto de 'No informado' si no se especifica.
 CREATE TABLE IF NOT EXISTS productos (
     id_producto INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -21,8 +18,6 @@ CREATE TABLE IF NOT EXISTS productos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabla de Ventas:
--- Registra cada venta realizada. Se almacena la fecha (por defecto la fecha actual) y el total de la venta.
--- Se añade un índice en la columna 'fecha' para facilitar las consultas por período.
 CREATE TABLE IF NOT EXISTS ventas (
     id_venta INT AUTO_INCREMENT PRIMARY KEY,
     fecha DATE NOT NULL DEFAULT (CURRENT_DATE),
@@ -31,15 +26,12 @@ CREATE TABLE IF NOT EXISTS ventas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabla de Detalle de Ventas:
--- Almacena cada línea (detalle) de una venta: cada producto vendido, la cantidad, precio unitario y subtotal.
--- Se establecen claves foráneas para garantizar la integridad referencial.
 CREATE TABLE IF NOT EXISTS detalle_venta (
     id_detalle INT AUTO_INCREMENT PRIMARY KEY,
     id_venta INT NOT NULL,
     id_producto INT NOT NULL,
     cantidad INT NOT NULL,
-    precio_unitario DECIMAL(10,2) NOT NULL,
-    subtotal DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2),
     FOREIGN KEY (id_venta) REFERENCES ventas(id_venta)
         ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
@@ -47,12 +39,20 @@ CREATE TABLE IF NOT EXISTS detalle_venta (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 ----------------------------------------------------------------------
+-- CREACIÓN DE LA TABLA DE AUDITORÍA
+----------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS auditoria (
+    id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
+    tabla VARCHAR(100) NOT NULL,
+    accion VARCHAR(50) NOT NULL,
+    descripcion TEXT,
+    fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+    usuario VARCHAR(100)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+----------------------------------------------------------------------
 -- TRIGGERS PARA ACTUALIZAR EL TOTAL DE LA VENTA
 ----------------------------------------------------------------------
--- Estos triggers recalculan el total de la venta en la tabla "ventas" cada vez que se
--- inserta, actualiza o elimina un detalle en "detalle_venta".
-
--- Trigger AFTER INSERT: Se activa después de insertar un detalle en la venta.
 DELIMITER //
 CREATE TRIGGER trg_actualizar_total_venta_despues_insercion
 AFTER INSERT ON detalle_venta
@@ -69,7 +69,6 @@ END;
 //
 DELIMITER ;
 
--- Trigger AFTER UPDATE: Se activa después de actualizar un detalle de la venta.
 DELIMITER //
 CREATE TRIGGER trg_actualizar_total_venta_despues_actualizacion
 AFTER UPDATE ON detalle_venta
@@ -86,7 +85,6 @@ END;
 //
 DELIMITER ;
 
--- Trigger AFTER DELETE: Se activa después de eliminar un detalle de la venta.
 DELIMITER //
 CREATE TRIGGER trg_actualizar_total_venta_despues_eliminacion
 AFTER DELETE ON detalle_venta
@@ -104,122 +102,160 @@ END;
 DELIMITER ;
 
 ----------------------------------------------------------------------
--- PROCEDIMIENTOS ALMACENADOS
+-- TRIGGERS PARA VALIDAR STOCK Y CALCULAR SUBTOTAL
 ----------------------------------------------------------------------
-
--- Procedimiento para Insertar un Producto:
--- Valida que el nombre no esté vacío y que el stock y precio sean mayores o iguales a cero.
 DELIMITER //
-CREATE PROCEDURE sp_insertar_producto(
-    IN p_nombre VARCHAR(255),
-    IN p_marca VARCHAR(100),
-    IN p_stock INT,
-    IN p_precio DECIMAL(10,2)
-)
-BEGIN
-    IF p_nombre IS NULL OR p_nombre = '' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre del producto es obligatorio';
-    END IF;
-    IF p_stock < 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El stock debe ser mayor o igual a cero';
-    END IF;
-    IF p_precio < 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El precio debe ser mayor o igual a cero';
-    END IF;
-    INSERT INTO productos (nombre, marca, stock, precio)
-    VALUES (p_nombre, IFNULL(p_marca, 'No informado'), p_stock, p_precio);
-END;
-//
-DELIMITER ;
-
--- Procedimiento para Actualizar un Producto:
--- Permite modificar los datos de un producto existente, realizando las mismas validaciones.
-DELIMITER //
-CREATE PROCEDURE sp_actualizar_producto(
-    IN p_id INT,
-    IN p_nombre VARCHAR(255),
-    IN p_marca VARCHAR(100),
-    IN p_stock INT,
-    IN p_precio DECIMAL(10,2)
-)
-BEGIN
-    IF p_nombre IS NULL OR p_nombre = '' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre del producto es obligatorio';
-    END IF;
-    IF p_stock < 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El stock debe ser mayor o igual a cero';
-    END IF;
-    IF p_precio < 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El precio debe ser mayor o igual a cero';
-    END IF;
-    UPDATE productos
-    SET nombre = p_nombre,
-        marca = IFNULL(p_marca, 'No informado'),
-        stock = p_stock,
-        precio = p_precio
-    WHERE id_producto = p_id;
-END;
-//
-DELIMITER ;
-
--- Procedimiento para Eliminar un Producto:
--- Elimina un producto según su ID.
-DELIMITER //
-CREATE PROCEDURE sp_eliminar_producto(
-    IN p_id INT
-)
-BEGIN
-    DELETE FROM productos WHERE id_producto = p_id;
-END;
-//
-DELIMITER ;
-
--- Procedimiento para Insertar una Venta (Cabecera):
--- Inserta una venta con la fecha especificada y total = 0 (los triggers actualizarán el total).
--- Retorna el ID de la venta mediante el parámetro de salida.
-DELIMITER //
-CREATE PROCEDURE sp_insertar_venta(
-    IN p_fecha DATE,
-    OUT p_id_venta INT
-)
-BEGIN
-    INSERT INTO ventas (fecha, total) VALUES (p_fecha, 0);
-    SET p_id_venta = LAST_INSERT_ID();
-END;
-//
-DELIMITER ;
-
--- Procedimiento para Insertar un Detalle de Venta:
--- Valida que el producto exista y que el stock sea suficiente; calcula el subtotal,
--- inserta el detalle de la venta y actualiza el stock del producto.
-DELIMITER //
-CREATE PROCEDURE sp_insertar_detalle_venta(
-    IN p_id_venta INT,
-    IN p_id_producto INT,
-    IN p_cantidad INT,
-    IN p_precio_unitario DECIMAL(10,2)
-)
+CREATE TRIGGER trg_validar_y_calcular_subtotal_antes_insercion
+BEFORE INSERT ON detalle_venta
+FOR EACH ROW
 BEGIN
     DECLARE v_stock INT;
-    DECLARE v_subtotal DECIMAL(10,2);
+    DECLARE v_precio DECIMAL(10,2);
 
-    -- Obtener el stock actual del producto
-    SELECT stock INTO v_stock FROM productos WHERE id_producto = p_id_producto;
+    -- Obtener stock y precio actual del producto
+    SELECT stock, precio INTO v_stock, v_precio
+    FROM productos
+    WHERE id_producto = NEW.id_producto;
+
     IF v_stock IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
     END IF;
-    IF p_cantidad > v_stock THEN
+    IF NEW.cantidad > v_stock THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente';
     END IF;
 
-    SET v_subtotal = p_cantidad * p_precio_unitario;
+    SET NEW.subtotal = NEW.cantidad * v_precio;
+END;
+//
+DELIMITER //
 
-    -- Insertar el detalle de la venta
-    INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, subtotal)
-    VALUES (p_id_venta, p_id_producto, p_cantidad, p_precio_unitario, v_subtotal);
+CREATE TRIGGER trg_validar_y_calcular_subtotal_antes_actualizacion
+BEFORE UPDATE ON detalle_venta
+FOR EACH ROW
+BEGIN
+    DECLARE v_stock INT;
+    DECLARE v_precio DECIMAL(10,2);
 
-    -- Actualizar el stock del producto
-    UPDATE productos SET stock = stock - p_cantidad WHERE id_producto = p_id_producto;
+    SELECT stock, precio INTO v_stock, v_precio
+    FROM productos
+    WHERE id_producto = NEW.id_producto;
+
+    IF v_stock IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe';
+    END IF;
+    IF NEW.cantidad > v_stock THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente';
+    END IF;
+
+    SET NEW.subtotal = NEW.cantidad * v_precio;
+END;
+//
+DELIMITER ;
+
+----------------------------------------------------------------------
+-- TRIGGERS DE AUDITORÍA PARA TABLA PRODUCTOS
+----------------------------------------------------------------------
+DELIMITER //
+CREATE TRIGGER trg_auditoria_productos_insert
+AFTER INSERT ON productos
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('productos', 'INSERT', CONCAT('Se insertó un producto con ID: ', NEW.id_producto, ', Nombre: ', NEW.nombre), CURRENT_USER());
+END;
+//
+DELIMITER //
+
+DELIMITER //
+CREATE TRIGGER trg_auditoria_productos_update
+AFTER UPDATE ON productos
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('productos', 'UPDATE', CONCAT('Se actualizó el producto con ID: ', NEW.id_producto, '. Valores antiguos: Nombre=', OLD.nombre, ', Stock=', OLD.stock, '. Valores nuevos: Nombre=', NEW.nombre, ', Stock=', NEW.stock), CURRENT_USER());
+END;
+//
+DELIMITER //
+
+DELIMITER //
+CREATE TRIGGER trg_auditoria_productos_delete
+AFTER DELETE ON productos
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('productos', 'DELETE', CONCAT('Se eliminó el producto con ID: ', OLD.id_producto, ', Nombre: ', OLD.nombre), CURRENT_USER());
+END;
+//
+DELIMITER ;
+
+----------------------------------------------------------------------
+-- TRIGGERS DE AUDITORÍA PARA TABLA VENTAS
+----------------------------------------------------------------------
+DELIMITER //
+CREATE TRIGGER trg_auditoria_ventas_insert
+AFTER INSERT ON ventas
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('ventas', 'INSERT', CONCAT('Se insertó una venta con ID: ', NEW.id_venta, ', Fecha: ', NEW.fecha), CURRENT_USER());
+END;
+//
+DELIMITER //
+
+DELIMITER //
+CREATE TRIGGER trg_auditoria_ventas_update
+AFTER UPDATE ON ventas
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('ventas', 'UPDATE', CONCAT('Se actualizó la venta con ID: ', NEW.id_venta, '. Valores antiguos: Total=', OLD.total, '. Valores nuevos: Total=', NEW.total), CURRENT_USER());
+END;
+//
+DELIMITER //
+
+DELIMITER //
+CREATE TRIGGER trg_auditoria_ventas_delete
+AFTER DELETE ON ventas
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('ventas', 'DELETE', CONCAT('Se eliminó la venta con ID: ', OLD.id_venta), CURRENT_USER());
+END;
+//
+DELIMITER ;
+
+----------------------------------------------------------------------
+-- TRIGGERS DE AUDITORÍA PARA TABLA DETALLE_VENTA
+----------------------------------------------------------------------
+DELIMITER //
+CREATE TRIGGER trg_auditoria_detalle_venta_insert
+AFTER INSERT ON detalle_venta
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('detalle_venta', 'INSERT', CONCAT('Se insertó un detalle de venta con ID: ', NEW.id_detalle, ', Venta ID: ', NEW.id_venta, ', Producto ID: ', NEW.id_producto, ', Cantidad: ', NEW.cantidad, ', Subtotal: ', NEW.subtotal), CURRENT_USER());
+END;
+//
+DELIMITER //
+
+DELIMITER //
+CREATE TRIGGER trg_auditoria_detalle_venta_update
+AFTER UPDATE ON detalle_venta
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('detalle_venta', 'UPDATE', CONCAT('Se actualizó el detalle de venta con ID: ', NEW.id_detalle, '. Valores antiguos: Cantidad=', OLD.cantidad, ', Subtotal=', OLD.subtotal, '. Valores nuevos: Cantidad=', NEW.cantidad, ', Subtotal=', NEW.subtotal), CURRENT_USER());
+END;
+//
+DELIMITER //
+
+DELIMITER //
+CREATE TRIGGER trg_auditoria_detalle_venta_delete
+AFTER DELETE ON detalle_venta
+FOR EACH ROW
+BEGIN
+  INSERT INTO auditoria (tabla, accion, descripcion, usuario)
+  VALUES ('detalle_venta', 'DELETE', CONCAT('Se eliminó el detalle de venta con ID: ', OLD.id_detalle, ', Venta ID: ', OLD.id_venta, ', Producto ID: ', OLD.id_producto), CURRENT_USER());
 END;
 //
 DELIMITER ;

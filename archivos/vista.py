@@ -10,8 +10,10 @@ from archivos.datos import BaseDatos
 from archivos.negocio import LogicaNegocio
 
 matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt  # Usado para mostrar el gráfico en ventana clásica
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
 
 # Ventana Principal
 class VentanaPrincipal(tk.Tk):
@@ -21,7 +23,6 @@ class VentanaPrincipal(tk.Tk):
         self.geometry("600x500")
         self.logica = logica
 
-        # Reescalado
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
@@ -33,7 +34,7 @@ class VentanaPrincipal(tk.Tk):
         etiqueta_bienvenida = ttk.Label(marco_principal, text="BIENVENIDO", font=("Helvetica", 24, "bold"))
         etiqueta_bienvenida.grid(row=0, column=0, pady=10, sticky="EW")
 
-        # Botones en 2 filas x 2 columnas
+        # Botones distribuidos en 2 filas x 2 columnas
         marco_botones = ttk.Frame(marco_principal)
         marco_botones.grid(row=1, column=0, sticky="NSEW", pady=20)
         marco_botones.columnconfigure(0, weight=1)
@@ -50,8 +51,8 @@ class VentanaPrincipal(tk.Tk):
         btn_reportes = ttk.Button(marco_botones, text="Reportes", command=self.abrir_ventana_reportes)
         btn_reportes.grid(row=1, column=0, padx=10, pady=10, sticky="NSEW")
 
-        btn_ventana4 = ttk.Button(marco_botones, text="Ventana 4", command=self.abrir_ventana_blanca)
-        btn_ventana4.grid(row=1, column=1, padx=10, pady=10, sticky="NSEW")
+        btn_mas_vendido = ttk.Button(marco_botones, text="Producto Más Vendido", command=self.abrir_ventana_mas_vendido)
+        btn_mas_vendido.grid(row=1, column=1, padx=10, pady=10, sticky="NSEW")
 
     def abrir_ventana_productos(self):
         VentanaProductos(self, self.logica)
@@ -62,8 +63,9 @@ class VentanaPrincipal(tk.Tk):
     def abrir_ventana_reportes(self):
         VentanaReportes(self, self.logica)
 
-    def abrir_ventana_blanca(self):
-        VentanaBlanca(self)
+    def abrir_ventana_mas_vendido(self):
+        VentanaMasVendido(self, self.logica)
+
 
 # Ventana para el CRUD de Productos
 class VentanaProductos(tk.Toplevel):
@@ -81,7 +83,6 @@ class VentanaProductos(tk.Toplevel):
         marco.columnconfigure(1, weight=1)
         marco.rowconfigure(6, weight=1)
 
-        # Formulario de Producto
         ttk.Label(marco, text="ID:").grid(row=0, column=0, sticky="W")
         self.entry_id = ttk.Entry(marco)
         self.entry_id.grid(row=0, column=1, sticky="EW", padx=5, pady=5)
@@ -112,7 +113,6 @@ class VentanaProductos(tk.Toplevel):
         btn_eliminar = ttk.Button(marco_botones, text="Eliminar", command=self.eliminar_producto)
         btn_eliminar.grid(row=0, column=2, padx=5)
 
-        # Treeview para mostrar productos
         self.tree = ttk.Treeview(marco, columns=("ID", "Nombre", "Marca", "Stock", "Precio"), show="headings")
         self.tree.heading("ID", text="ID")
         self.tree.heading("Nombre", text="Nombre")
@@ -130,15 +130,14 @@ class VentanaProductos(tk.Toplevel):
         self.cargar_productos()
 
     def cargar_productos(self):
-        """Carga los productos desde la base de datos y actualiza el Treeview."""
         for item in self.tree.get_children():
             self.tree.delete(item)
         productos = self.logica.obtener_productos()
         for prod in productos:
-            self.tree.insert("", tk.END, values=(prod["id_producto"], prod["nombre"], prod["marca"], prod["stock"], prod["precio"]))
+            self.tree.insert("", tk.END,
+                             values=(prod["id_producto"], prod["nombre"], prod["marca"], prod["stock"], prod["precio"]))
 
     def seleccionar_producto(self, evento):
-        """Carga los datos del producto seleccionado en el formulario."""
         item_sel = self.tree.focus()
         if item_sel:
             valores = self.tree.item(item_sel, "values")
@@ -204,7 +203,8 @@ class VentanaProductos(tk.Toplevel):
         self.entry_stock.delete(0, tk.END)
         self.entry_precio.delete(0, tk.END)
 
-# Ventana para Gestión de Ventas
+
+# Ventana para la Gestión de Ventas
 class VentanaVentas(tk.Toplevel):
     def __init__(self, maestro, logica: LogicaNegocio):
         super().__init__(maestro)
@@ -249,6 +249,7 @@ class VentanaVentas(tk.Toplevel):
         ttk.Label(marco_detalle, text="Cantidad:").grid(row=1, column=0, padx=5, pady=5)
         self.entry_cantidad = ttk.Entry(marco_detalle, width=10)
         self.entry_cantidad.grid(row=1, column=1, padx=5, pady=5, sticky="W")
+        # Se muestra el precio unitario para referencia, pero no se envía al procedimiento.
         ttk.Label(marco_detalle, text="Precio Unitario:").grid(row=1, column=2, padx=5, pady=5)
         self.entry_precio = ttk.Entry(marco_detalle, width=10)
         self.entry_precio.grid(row=1, column=3, padx=5, pady=5)
@@ -257,8 +258,9 @@ class VentanaVentas(tk.Toplevel):
         btn_agregar = ttk.Button(marco_detalle, text="Agregar", command=self.agregar_producto)
         btn_agregar.grid(row=1, column=4, padx=5, pady=5)
 
-        # Treeview para detalles de la venta
-        self.tree_detalle = ttk.Treeview(marco, columns=("Producto", "Cantidad", "Precio Unitario", "Subtotal"), show="headings")
+        # Treeview para mostrar los detalles de la venta
+        self.tree_detalle = ttk.Treeview(marco, columns=("Producto", "Cantidad", "Precio Unitario", "Subtotal"),
+                                         show="headings")
         self.tree_detalle.heading("Producto", text="Producto")
         self.tree_detalle.heading("Cantidad", text="Cantidad")
         self.tree_detalle.heading("Precio Unitario", text="Precio Unitario")
@@ -342,19 +344,20 @@ class VentanaVentas(tk.Toplevel):
         for detalle in self.lista_detalles:
             id_prod, prod_formateado, cantidad, precio, subtotal = detalle
             try:
-                self.logica.sp_insertar_detalle_venta(id_venta, id_prod, cantidad, precio)
+                self.logica.sp_insertar_detalle_venta(id_venta, id_prod, cantidad)
             except Exception as e:
                 messagebox.showerror("Error", f"Error al insertar el detalle de la venta:\n{e}", parent=self)
                 return
         messagebox.showinfo("Venta", "Venta registrada exitosamente.", parent=self)
         self.destroy()
 
-# Ventana para Reportes de Ventas
+
+# Ventana para Reportes: Muestra el gráfico en la ventana clásica de matplotlib
 class VentanaReportes(tk.Toplevel):
     def __init__(self, maestro, logica: LogicaNegocio):
         super().__init__(maestro)
-        self.title("Reportes de Ventas")
-        self.geometry("800x600")
+        self.title("Reporte de Ventas")
+        self.geometry("300x150")  # Ventana para seleccionar mes y año
         self.logica = logica
 
         self.columnconfigure(0, weight=1)
@@ -362,37 +365,23 @@ class VentanaReportes(tk.Toplevel):
 
         marco = ttk.Frame(self, padding=20)
         marco.grid(row=0, column=0, sticky="NSEW")
-        marco.columnconfigure(0, weight=1)
-        marco.rowconfigure(3, weight=1)
 
-        # Selección de mes y año
-        marco_seleccion = ttk.Frame(marco)
-        marco_seleccion.grid(row=0, column=0, sticky="EW", pady=10)
+        ttk.Label(marco, text="Mes:").grid(row=0, column=0, padx=5, pady=5)
         datos_meses = self.logica.obtener_meses_ventas()
         meses = [str(item["mes"]) for item in datos_meses] if datos_meses else [str(date.today().month)]
-        ttk.Label(marco_seleccion, text="Mes:").grid(row=0, column=0, padx=5, pady=5)
-        self.combo_mes = ttk.Combobox(marco_seleccion, values=meses, state="readonly", width=10)
+        self.combo_mes = ttk.Combobox(marco, values=meses, state="readonly", width=10)
         self.combo_mes.grid(row=0, column=1, padx=5, pady=5)
         self.combo_mes.current(0)
+
+        ttk.Label(marco, text="Año:").grid(row=1, column=0, padx=5, pady=5)
         datos_anios = self.logica.obtener_anios_ventas()
         anios = [str(item["anio"]) for item in datos_anios] if datos_anios else [str(date.today().year)]
-        ttk.Label(marco_seleccion, text="Año:").grid(row=0, column=2, padx=5, pady=5)
-        self.combo_anio = ttk.Combobox(marco_seleccion, values=anios, state="readonly", width=10)
-        self.combo_anio.grid(row=0, column=3, padx=5, pady=5)
+        self.combo_anio = ttk.Combobox(marco, values=anios, state="readonly", width=10)
+        self.combo_anio.grid(row=1, column=1, padx=5, pady=5)
         self.combo_anio.current(0)
-        btn_generar = ttk.Button(marco_seleccion, text="Generar Reporte", command=self.generar_reporte)
-        btn_generar.grid(row=0, column=4, padx=10, pady=5)
 
-        # Área para el gráfico
-        self.marco_grafico = ttk.Frame(marco)
-        self.marco_grafico.grid(row=1, column=0, sticky="NSEW", pady=10)
-        self.marco_grafico.columnconfigure(0, weight=1)
-        self.marco_grafico.rowconfigure(0, weight=1)
-        self.canvas = None
-
-        # Información adicional (producto más vendido)
-        self.etiqueta_info = ttk.Label(marco, text="", font=("Helvetica", 12))
-        self.etiqueta_info.grid(row=2, column=0, pady=10, sticky="W")
+        btn_generar = ttk.Button(marco, text="Generar Gráfico", command=self.generar_reporte)
+        btn_generar.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
 
     def generar_reporte(self):
         mes = self.combo_mes.get()
@@ -408,25 +397,72 @@ class VentanaReportes(tk.Toplevel):
         productos = [item["nombre"] for item in datos_reporte]
         cantidades = [item["total_vendido"] for item in datos_reporte]
 
-        fig = Figure(figsize=(8, 4), dpi=100)
-        ax = fig.add_subplot(111)
-        ax.bar(productos, cantidades, color="skyblue")
-        ax.set_xlabel("Producto")
-        ax.set_ylabel("Cantidad Vendida")
-        ax.set_title(f"Ventas en {mes}/{anio}")
-        ax.tick_params(axis='x', rotation=45)
-        fig.tight_layout()
+        # Crear gráfico de barras horizontal utilizando matplotlib clásico
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(12, 8))
+        plt.barh(productos, cantidades, color="skyblue")
+        plt.xlabel("Cantidad Vendida")
+        plt.ylabel("Producto")
+        plt.title(f"Ventas en {mes}/{anio}")
+        plt.tick_params(axis='y', labelsize=8)
+        plt.tight_layout()
+        plt.show()
 
-        if self.canvas:
-            self.canvas.get_tk_widget().destroy()
-        self.canvas = FigureCanvasTkAgg(fig, master=self.marco_grafico)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().grid(row=0, column=0, sticky="NSEW")
 
-        prod_mas_vendido = datos_reporte[0]["nombre"]
-        cantidad_max = datos_reporte[0]["total_vendido"]
-        texto_info = f"Producto más vendido: {prod_mas_vendido} (Cantidad: {cantidad_max})"
-        self.etiqueta_info.config(text=texto_info)
+# Ventana para Producto Más Vendido y Producto con Mayores Ingresos
+class VentanaMasVendido(tk.Toplevel):
+    def __init__(self, maestro, logica: LogicaNegocio):
+        super().__init__(maestro)
+        self.title("Producto Más Vendido e Ingresos")
+        self.geometry("500x300")
+        self.logica = logica
+
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+        marco = ttk.Frame(self, padding=20)
+        marco.grid(row=0, column=0, sticky="NSEW")
+        marco.columnconfigure(0, weight=1)
+
+        ttk.Label(marco, text="Mes:").grid(row=0, column=0, padx=5, pady=5)
+        datos_meses = self.logica.obtener_meses_ventas()
+        meses = [str(item["mes"]) for item in datos_meses] if datos_meses else [str(date.today().month)]
+        self.combo_mes = ttk.Combobox(marco, values=meses, state="readonly", width=10)
+        self.combo_mes.grid(row=0, column=1, padx=5, pady=5)
+        self.combo_mes.current(0)
+
+        ttk.Label(marco, text="Año:").grid(row=0, column=2, padx=5, pady=5)
+        datos_anios = self.logica.obtener_anios_ventas()
+        anios = [str(item["anio"]) for item in datos_anios] if datos_anios else [str(date.today().year)]
+        self.combo_anio = ttk.Combobox(marco, values=anios, state="readonly", width=10)
+        self.combo_anio.grid(row=0, column=3, padx=5, pady=5)
+        self.combo_anio.current(0)
+
+        btn_generar = ttk.Button(marco, text="Generar Reporte", command=self.generar_reporte)
+        btn_generar.grid(row=0, column=4, padx=10, pady=5)
+
+        self.etiqueta_resultado = ttk.Label(marco, text="", font=("Helvetica", 16))
+        self.etiqueta_resultado.grid(row=1, column=0, columnspan=5, pady=20, sticky="NSEW")
+
+    def generar_reporte(self):
+        mes = self.combo_mes.get()
+        anio = self.combo_anio.get()
+        if not mes or not anio:
+            messagebox.showerror("Error", "Seleccione mes y año.", parent=self)
+            return
+        datos_reporte = self.logica.obtener_reporte_ventas_mes_anio(mes, anio)
+        if not datos_reporte:
+            messagebox.showinfo("Reporte", "No hay datos de ventas para el mes y año seleccionados.", parent=self)
+            return
+        # Calcular el producto con mayor cantidad vendida
+        max_vendido = max(datos_reporte, key=lambda x: x["total_vendido"])
+        # Calcular el producto que generó mayores ingresos
+        max_ingresos = max(datos_reporte, key=lambda x: x["total_ingresos"])
+        self.etiqueta_resultado.config(
+            text=f"Producto más vendido: {max_vendido['nombre']} (Cantidad: {max_vendido['total_vendido']})\n"
+                 f"Producto con mayores ingresos: {max_ingresos['nombre']} (Ingresos: {max_ingresos['total_ingresos']:.2f})"
+        )
+
 
 # Ventana en Blanco para Futura Implementación
 class VentanaBlanca(tk.Toplevel):
@@ -436,14 +472,15 @@ class VentanaBlanca(tk.Toplevel):
         self.geometry("400x300")
         ttk.Label(self, text="Esta ventana se implementará posteriormente.", font=("Helvetica", 16)).pack(expand=True)
 
+
 ##############################
 # EJECUCIÓN PRINCIPAL
 ##############################
 if __name__ == "__main__":
-    # Inicializar la base de datos
-    bd = BaseDatos(host="127.0.0.1", usuario="root", contrasena="root", base="gestion_inventario")
-    # Inicializar la lógica de negocio
+    bd = BaseDatos(host="localhost", usuario="root", contrasena="root", base="gestion_inventario")
     logica = LogicaNegocio(bd)
-    # Crear y ejecutar la aplicación principal
     app = VentanaPrincipal(logica)
     app.mainloop()
+
+
+

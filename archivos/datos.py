@@ -1,12 +1,27 @@
+"""
+Aplicación de Gestión de Inventario en 3 Capas
+  - Capa de Acceso a Datos: Conexión y ejecución de consultas en MySQL.
+  - Capa de Lógica de Negocio: Lógica de negocio y llamadas a procedimientos almacenados.
+  - Capa de Presentación: Interfaz gráfica en Tkinter.
+
+Esta versión se adapta al nuevo modelo en el que:
+ - El precio se almacena únicamente en la tabla "productos".
+ - En la tabla "detalle_venta" se elimina la columna "precio_unitario"; el subtotal se calcula automáticamente.
+ - Se utilizan triggers para validar el stock y calcular el subtotal.
+ - La ventana Reportes muestra el gráfico de barras horizontal en la ventana clásica de matplotlib.
+ - La ventana Producto Más Vendido muestra, según el mes y año seleccionado, tanto el producto con mayor cantidad vendida como el que generó mayores ingresos.
+"""
+
 ##############################
-# CAPA 1: ACCESO A DATOS (Base de Datos)
+# CAPA 1: ACCESO A DATOS (BaseDatos)
 ##############################
 import mysql.connector
 from mysql.connector import Error
 from tkinter import messagebox
 
+
 class BaseDatos:
-    def __init__(self, host="127.0.0.1", usuario="root", contrasena="root", base="gestion_inventario"):
+    def __init__(self, host="localhost", usuario="tu_usuario", contrasena="tu_contraseña", base="gestion_inventario"):
         self.host = host
         self.usuario = usuario
         self.contrasena = contrasena
@@ -38,9 +53,7 @@ class BaseDatos:
         return self.conexion
 
     def ejecutar_consulta(self, consulta, parametros=None):
-        """
-        Ejecuta una consulta SQL (INSERT, UPDATE o DELETE) y retorna el cursor.
-        """
+        """Ejecuta una consulta SQL (INSERT, UPDATE o DELETE) y retorna el cursor."""
         try:
             con = self.obtener_conexion()
             cursor = con.cursor()
@@ -52,9 +65,7 @@ class BaseDatos:
             return None
 
     def obtener_todos(self, consulta, parametros=None):
-        """
-        Ejecuta una consulta SELECT y retorna todos los registros en formato de diccionario.
-        """
+        """Ejecuta una consulta SELECT y retorna todos los registros en formato de diccionario."""
         try:
             con = self.obtener_conexion()
             cursor = con.cursor(dictionary=True)
@@ -64,3 +75,4 @@ class BaseDatos:
         except Error as e:
             messagebox.showerror("Error de Base de Datos", f"Error obteniendo datos:\n{e}")
             return []
+
