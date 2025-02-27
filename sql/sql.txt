@@ -413,4 +413,4 @@ DELIMITER ;
 -- CALL sp_insertar_venta('2024-11-05', @idVenta);
 
 -- CALL sp_insertar_detalle_venta(@idVenta, 1, 2);
--- CALL sp_insertar_detalle_venta(idVenta, 1, 2);
+
